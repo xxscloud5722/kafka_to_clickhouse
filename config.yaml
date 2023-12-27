@@ -1,0 +1,26 @@
+kafka:
+  host: 10.10.1.5
+  port: 9094
+  consumer:
+    group-id: default
+clickhouse:
+  host: 10.10.1.5
+  port: 9000
+  username: default
+  password: Lxasd123!@#
+  database: logs
+topic:
+  - test
+sink: logs.ding
+fields: date, env, service_code, level, thread, class, message
+pattern: '(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+) (\w+) \[([^]]+)\] ([^:]+) : (.+[\s\S]*)'
+pattern-index:
+  - date
+  - level
+  - thread
+  - class
+  - message
+debug: true
+output:
+  # ${env}/${service_code}
+  format: '${env}/${service_code} ${date} ${level} [${thread}] ${class} : ${message}'
