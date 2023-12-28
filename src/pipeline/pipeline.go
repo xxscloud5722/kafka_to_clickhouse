@@ -9,6 +9,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/jmoiron/sqlx"
 	"kafka-to-clickhouse/src/app"
+	"log"
 	"net/url"
 	"os"
 	"os/signal"
@@ -91,6 +92,10 @@ func toSQL(messageList []*sarama.ConsumerMessage) (error, string, [][]any) {
 		if ok {
 			regexpPattern := app.Get().Regexp()
 			matches := regexpPattern.FindStringSubmatch(logEntry.(string))
+			if matches == nil {
+				color.Red("Regexp Error")
+				log.Fatal()
+			}
 			if len(matches) > len(app.Get().PatternIndex) {
 				for i, key := range app.Get().PatternIndex {
 					data[key] = strings.Trim(matches[i+1], "\n")
