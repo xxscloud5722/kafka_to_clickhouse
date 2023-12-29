@@ -94,7 +94,7 @@ func toSQL(messageList []*sarama.ConsumerMessage) (error, string, [][]any) {
 			matches := regexpPattern.FindStringSubmatch(logEntry.(string))
 			if matches == nil {
 				color.Red("Regexp Error")
-				log.Fatal()
+				log.Fatal(logEntry)
 			}
 			if len(matches) > len(app.Get().PatternIndex) {
 				for i, key := range app.Get().PatternIndex {
