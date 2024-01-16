@@ -85,6 +85,15 @@ Thanks for your contributions!
 
 - [@xiaoliuya](https://github.com/xxscloud5722/)
 
+# Docker
+```bash
+# pull image
+docker pull xxscloud5722/kafka_to_clickhouse:1.0.1
+
+# Import Config and Run
+docker run -v [config]:/app/config/config.yaml xxscloud5722/kafka_to_clickhouse
+```
+
 # Case-CN
 - [Clickhouse 日志采集存储方案 （代号：明月长老）语雀](https://www.yuque.com/mcat/uggxu0/mfgouabbgg5rs8rq#OHjNq)
 
