@@ -79,73 +79,14 @@ Confirm that the program has been downloaded or programming is completed.
 log_sync config.yaml
 ```
 
-# fluent-bit Demo
-```bash
-# fluent-bit.conf
-[SERVICE]
-    Flush         1
-    Log_Level     info
-    Daemon        off
-    Parsers_File  parser.conf
-
-
-[INPUT]
-    Name         tail
-    Path         /opt/logs.log
-    Tag          file_logs
-    Refresh_Interval 1
-    multiline.parser java_parser
-
-[FILTER]
-    Name record_modifier
-    Match *
-    # Add Value
-    Record service_code [value]
-    Record env [value]
-
-
-# Debug
-[OUTPUT]
-    Name stdout
-    Match *
-
-# Kafka
-[OUTPUT]
-    Name kafka
-    Match *
-    Brokers [kafka address]
-    Topics [kafka topic]
-    Timestamp_Key @timestamp
-    
-    
-# ================================
-
-# parser.conf
-[MULTILINE_PARSER]
-    name          java_parser
-    type          regex
-    flush_timeout 1000
-    #
-    # Regex rules for multiline parsing
-    # ---------------------------------
-    #
-    # configuration hints:
-    #
-    #  - first state always has the name: start_state
-    #  - every field in the rule must be inside double quotes
-    #
-    # rules |   state name  | regex pattern                  | next state
-    # ------|---------------|--------------------------------------------
-    rule      "start_state"   "/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}).*$/"             "cont"
-    rule      "cont"          "/^(?!\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)[a-zA-Z\s\S].*/" "cont"
-```
-
 # Contributors
 
 Thanks for your contributions!
 
 - [@xiaoliuya](https://github.com/xxscloud5722/)
 
+# Case-CN
+- [Clickhouse 日志采集存储方案 （代号：明月长老）语雀](https://www.yuque.com/mcat/uggxu0/mfgouabbgg5rs8rq#OHjNq)
 
 # Zen
 Don't let what you cannot do interfere with what you can do.

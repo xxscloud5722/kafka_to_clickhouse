@@ -14,6 +14,8 @@ func main() {
 	} else {
 		fileName = "config.yaml"
 	}
+	// Set GLOBAL variable
 	app.SetConfig(fileName)
+	// Pip Connect
 	pipeline.Connect()
 }

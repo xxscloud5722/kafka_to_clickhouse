@@ -58,6 +58,7 @@ func (config *Config) Regexp() *regexp.Regexp {
 
 var app Config
 
+// SetConfig GLOBAL variable
 func SetConfig(fileName string) {
 	yamlFile, err := os.ReadFile(fileName)
 	if err != nil {
@@ -73,6 +74,7 @@ func SetConfig(fileName string) {
 	app = config
 }
 
+// Get GLOBAL variable
 func Get() *Config {
 	return &app
 }
