@@ -10,7 +10,7 @@ use rdkafka::message::BorrowedMessage;
 use tokio::{spawn, time};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::{LogMessage, MessageCallback, SourceEnum};
+use crate::{LogMessage};
 
 impl From<BorrowedMessage<'_>> for LogMessage {
     fn from(message: BorrowedMessage) -> Self {
@@ -105,7 +105,7 @@ async fn kafka_recv(consumer: &StreamConsumer, length: usize, message_vec: &mut 
     }
 }
 
-pub fn create_instance(source: SourceEnum) -> Box<dyn ReceiveTrait> {
-    info!("[Source] Initialize {:?} instance.", source);
-    Box::new(Kafka {})
-}
+// pub fn create_instance(source: SourceEnum) -> Box<dyn ReceiveTrait> {
+//     info!("[Source] Initialize {:?} instance.", source);
+//     Box::new(Kafka {})
+// }

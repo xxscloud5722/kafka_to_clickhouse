@@ -1,13 +1,16 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::io::Write;
 
 use chrono::{DateTime, Local, TimeZone};
 use clap::Parser;
 use config::Config;
-use log::{info, Level, log};
+use log::{error, info, Level, log};
 use serde::Deserialize;
 use serde_json::Value;
+
 use KafkaSync::{CObject, Pip, PipBuilder};
+use KafkaSync::error::SyncError;
 
 #[derive(Parser, Debug)]
 #[command(version = "1.0.1", about = "Log2Click: Rust program for Kafka log processing with seamless Clickhouse integration and efficient handling of large volumes.", long_about = None)]
@@ -18,10 +21,25 @@ struct Args {
     config: String,
 }
 
+async fn try_main() -> Result<(), SyncError> {
+    let args = Args::parse();
+    info!("Import Configuration: {}", &args.config);
 
+    let settings = Config::builder()
+        .add_source(config::File::with_name(&args.config))
+        .build()?;
+
+    let conf = settings.try_deserialize::<HashMap<String, CObject>>()?;
+
+    PipBuilder::default().conf(conf).build()?
+        .run().await;
+
+    return Ok(());
+}
 
 #[tokio::main]
 async fn main() {
+    // Log Format Definition
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format(|buffer, record| {
             writeln!(
@@ -40,24 +58,19 @@ async fn main() {
         })
         .init();
 
-
-    let args = Args::parse();
-    info!("Import Configuration: {}", &args.config);
-
-    let settings = Config::builder()
-        .add_source(config::File::with_name(&args.config))
-        .build()
-        .unwrap();
-
-    let conf = settings
-        .try_deserialize::<HashMap<String, CObject>>()
-        .unwrap();
-
-    PipBuilder::default()
-        .conf(conf)
-        .build()
-        .unwrap()
-        .run().await;
+    match try_main().await {
+        Ok(_) => {}
+        Err(error) => {
+            match error.source() {
+                None => {
+                    error!("Undefined errors.");
+                }
+                Some(error) => {
+                    error!("{:?}", error);
+                }
+            }
+        }
+    };
 
     //info!("Import Configuration: {:?}", data);
 

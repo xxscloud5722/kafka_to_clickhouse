@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use tokio::sync::mpsc::Receiver;
 
-use crate::{Filter, LogMessage, SinkEnum};
+use crate::{Filter, LogMessage};
 
 #[async_trait(? Send)]
 pub trait SendTrait {
@@ -27,6 +27,6 @@ impl SendTrait for Clickhouse {
 }
 
 
-pub fn create_instance(sink: &SinkEnum) -> Box<dyn SendTrait> {
-    Box::new(Clickhouse)
-}
+// pub fn create_instance(sink: &SinkEnum) -> Box<dyn SendTrait> {
+//     Box::new(Clickhouse)
+// }
