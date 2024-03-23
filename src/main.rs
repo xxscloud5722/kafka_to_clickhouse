@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::Write;
+use std::sync::Arc;
 
 use chrono::{DateTime, Local, TimeZone};
 use clap::Parser;
@@ -9,8 +10,10 @@ use log::{error, info, Level, log};
 use serde::Deserialize;
 use serde_json::Value;
 
-use KafkaSync::{CObject, Pip, PipBuilder};
+use KafkaSync::{CObject, Pip, PipBuilder, ReceiveTrait, SendTrait};
 use KafkaSync::error::SyncError;
+use KafkaSync::sink::Clickhouse;
+use KafkaSync::source::Kafka;
 
 #[derive(Parser, Debug)]
 #[command(version = "1.0.1", about = "Log2Click: Rust program for Kafka log processing with seamless Clickhouse integration and efficient handling of large volumes.", long_about = None)]
@@ -30,9 +33,14 @@ async fn try_main() -> Result<(), SyncError> {
         .build()?;
 
     let conf = settings.try_deserialize::<HashMap<String, CObject>>()?;
-
-    PipBuilder::default().conf(conf).build()?
-        .run().await;
+    let source: Arc<dyn ReceiveTrait> = Arc::new(Kafka::create(&conf)?);
+    let sink: Arc<dyn SendTrait> = Arc::new(Clickhouse);
+    PipBuilder::default()
+        .conf(conf)
+        .source(Some(source))
+        .sink(Some(sink))
+        .build()?
+        .run().await?;
 
     return Ok(());
 }
@@ -71,22 +79,5 @@ async fn main() {
             }
         }
     };
-
-    //info!("Import Configuration: {:?}", data);
-
-    // env::set_var("receive.kafka.server", "logs.liexiong.net:29094");
-    // env::set_var("receive.kafka.topic", "public");
-    // env::set_var("receive.kafka.group_id", "test10");
-    // env::set_var("receive.kafka.size", "1000");
-    // env::set_var("receive.kafka.timeout", "3000");
-    //
-    // env::set_var("sender.clickhouse.server", "10.10.1.5");
-    // env::set_var("sender.clickhouse.username", "default");
-    // env::set_var("sender.clickhouse.password", "Lxasd123!@#");
-
-    // create_pipeline()
-    //     .source(SourceEnum::Kafka)
-    //     .filter(vec![Box::new(parser::Json)])
-    //     .sink(SinkEnum::Clickhouse)
-    //     .run().await;
 }
+

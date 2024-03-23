@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::env;
 use std::future::Future;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use config::ConfigBuilder;
 use log::{debug, info, warn};
 use rdkafka::{ClientConfig, Message, Offset, TopicPartitionList};
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
@@ -10,7 +12,8 @@ use rdkafka::message::BorrowedMessage;
 use tokio::{spawn, time};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::{LogMessage};
+use crate::{CObject, LogMessage, ReceiveTrait};
+use crate::error::SyncError;
 
 impl From<BorrowedMessage<'_>> for LogMessage {
     fn from(message: BorrowedMessage) -> Self {
@@ -33,79 +36,81 @@ impl From<BorrowedMessage<'_>> for LogMessage {
     }
 }
 
-
-#[async_trait(? Send)]
-pub trait ReceiveTrait {
-    async fn pull(&mut self, sender: Sender<Vec<LogMessage>>);
+pub struct Kafka {
+    server: String,
+    topic: String,
+    group_id: String,
+    size: usize,
+    timeout: u64,
+    consumer: StreamConsumer,
 }
 
-pub struct Kafka;
-
-#[async_trait(? Send)]
-impl ReceiveTrait for Kafka {
-    async fn pull(&mut self, sender: Sender<Vec<LogMessage>>) {
+impl Kafka {
+    pub fn create(conf: &HashMap<String, CObject>) -> Result<Kafka, SyncError> {
         info!("Welcome to Kafka Synchronization ...");
-        let server = env::var("receive.kafka.server").expect("Environment variable 'receive.kafka.server' could not be found.");
-        let topic = env::var("receive.kafka.topic").expect("Environment variable 'receive.kafka.topic' could not be found.");
-        let group_id = env::var("receive.kafka.group_id").expect("Environment variable 'receive.kafka.group_id' could not be found.");
-        let size: usize = env::var("receive.kafka.size").expect("Environment variable 'receive.kafka.size' could not be found.").parse().unwrap();
-        let timeout: u64 = env::var("receive.kafka.timeout").expect("Environment variable 'receive.kafka.timeout' could not be found.").parse().unwrap();
+        let conf: Option<HashMap<String, CObject>> = conf.get("receive").ok_or(SyncError::Option)?.into();
+        let conf: Option<HashMap<String, CObject>> = conf.ok_or(SyncError::Option)?.get("kafka").ok_or(SyncError::Option)?.into();
+        let conf = conf.ok_or(SyncError::Option)?;
+
+        let server: String = conf.get("server")
+            .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.server' could not be found."))?.into();
+        let topic: String = conf.get("topic")
+            .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.topic' could not be found."))?.into();
+        let group_id: String = conf.get("group_id")
+            .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.group_id' could not be found."))?.into();
+        let size: f64 = conf.get("size")
+            .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.size' could not be found."))?.into();
+        let timeout: f64 = conf.get("timeout")
+            .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.timeout' could not be found."))?.into();
 
         info!("[Kafka] Server: {}, Topic: {}, GroupId: {}", server, topic, group_id);
 
         // Create kafka Config.
         let mut consumer_config = ClientConfig::new();
         consumer_config
-            .set("group.id", group_id)
-            .set("bootstrap.servers", server)
+            .set("group.id", &group_id)
+            .set("bootstrap.servers", &server)
             .set("auto.offset.reset", "latest")
             .set("enable.auto.commit", "true");
 
         // Kafka Consumer.
-        let consumer: StreamConsumer = consumer_config.create().expect("Consumer creation failed");
+        let consumer: StreamConsumer = consumer_config.create()?;
 
         // Kafka Subscribe.
-        consumer.subscribe(&[&topic]).expect("Can't subscribe to specified topic");
+        consumer.subscribe(&[&topic.to_owned()])?;
 
-        // let mut tp_list = TopicPartitionList::new();
-        // tp_list.add_partition(&topic, 0).set_offset(Offset::Offset(101091379)).expect("TODO: panic message");
-        // consumer.assign(&tp_list).expect("Can't assign partitions");
+        Ok(Kafka { server, topic, group_id, size: size as usize, timeout: timeout as u64, consumer })
+    }
 
+    pub async fn kafka_recv(&self, message_vec: &mut Vec<LogMessage>) -> Result<(), SyncError> {
+        loop {
+            let message = self.consumer.recv().await?;
+            message_vec.push(message.into());
+            if message_vec.len() >= self.size {
+                return Ok(());
+            }
+        }
+    }
+}
+
+#[async_trait(? Send)]
+impl ReceiveTrait for Kafka {
+    async fn pull(&self) -> Result<Vec<LogMessage>, SyncError> {
         loop {
             let mut vec = Vec::new();
             tokio::select! {
-                data = kafka_recv(&consumer, size, &mut vec) => {
+                _ = self.kafka_recv(&mut vec) => {
                     debug!("[kafka] Number of triggers. ");
                 }
-                _ = time::sleep(Duration::from_millis(timeout)) => {
+                _ = time::sleep(Duration::from_millis(self.timeout)) => {
                     debug!("[kafka] Time of triggers. ");
                 }
             }
             if vec.len() > 0 {
-                sender.send(vec).await.unwrap();
+                return Ok(vec);
             }
         }
     }
 }
 
 
-async fn kafka_recv(consumer: &StreamConsumer, length: usize, message_vec: &mut Vec<LogMessage>) {
-    loop {
-        match consumer.recv().await {
-            Ok(message) => {
-                //consumer.commit_message(&message, CommitMode::Sync).unwrap();
-                println!("================>>>  {}", message.offset());
-                message_vec.push(message.into());
-                if message_vec.len() >= length {
-                    return;
-                }
-            }
-            Err(_) => {}
-        };
-    }
-}
-
-// pub fn create_instance(source: SourceEnum) -> Box<dyn ReceiveTrait> {
-//     info!("[Source] Initialize {:?} instance.", source);
-//     Box::new(Kafka {})
-// }

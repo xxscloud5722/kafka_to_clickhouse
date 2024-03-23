@@ -2,15 +2,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use config::Source;
 use derive_builder::Builder;
 use rdkafka::Message;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use crate::sink::SendTrait;
+use crate::error::SyncError;
 
-mod source;
-mod sink;
+pub mod source;
+pub mod sink;
 pub mod parser;
 pub mod error;
 
@@ -34,49 +35,69 @@ pub struct LogMessage {
     pub map: Option<Map<String, Value>>,
 }
 
-#[async_trait(? Send)]
-pub trait Filter {
-    async fn process(&self, data: Vec<LogMessage>) -> Vec<LogMessage>;
+impl From<&CObject> for Option<HashMap<String, CObject>> {
+    fn from(obj: &CObject) -> Self {
+        match obj {
+            CObject::Object(map) => Some(map.clone()),
+            _ => None
+        }
+    }
 }
 
-#[derive(Default, Builder, Debug)]
+impl From<&CObject> for String {
+    fn from(obj: &CObject) -> Self {
+        match obj {
+            CObject::String(v) => v.to_owned(),
+            _ => String::default()
+        }
+    }
+}
+
+impl From<&CObject> for f64 {
+    fn from(obj: &CObject) -> Self {
+        match obj {
+            CObject::Number(v) => *v,
+            _ => 0f64
+        }
+    }
+}
+
+#[async_trait(? Send)]
+pub trait Filter {
+    async fn process(&self, data: Vec<LogMessage>) -> Result<Vec<LogMessage>, SyncError>;
+}
+
+#[async_trait(? Send)]
+pub trait ReceiveTrait {
+    async fn pull(&self) -> Result<Vec<LogMessage>, SyncError>;
+}
+
+#[async_trait(? Send)]
+pub trait SendTrait {
+    async fn push(&self, message: Vec<LogMessage>) -> Result<(), SyncError>;
+}
+
+
+#[derive(Default, Builder)]
 #[builder(setter(into))]
 pub struct Pip {
     conf: HashMap<String, CObject>,
-    filters: Option<Box<dyn Filter>>,
+    #[builder(default = "None")]
+    filters: Option<Vec<Arc<dyn Filter>>>,
+    source: Option<Arc<dyn ReceiveTrait>>,
+    sink: Option<Arc<dyn SendTrait>>,
 }
 
 impl Pip {
-    pub async fn run(&self) {}
+    pub async fn run(self) -> Result<(), SyncError> {
+        let receive = self.source.ok_or(SyncError::Option)?;
+        let filters = self.filters.unwrap_or(Vec::default());
+        loop {
+            let mut messasge = receive.pull().await?;
+            for x in &filters {
+                messasge = x.process(messasge).await?;
+            }
+        }
+        Ok(())
+    }
 }
-
-
-// impl PipelineBuild {
-//     pub async fn run(&self) {
-//         let source_type = match &self.source.value {
-//             None => SourceEnum::Kafka,
-//             Some(v) => v.to_owned()
-//         };
-//         let sink_type = match &self.sink.value {
-//             None => &SinkEnum::Clickhouse,
-//             Some(v) => v
-//         };
-//
-//         let (tx, mut rx) = mpsc::channel::<Vec<LogMessage>>(100);
-//         let mut source_instance = source::create_instance(source_type);
-//         let sink_instance = sink::create_instance(sink_type);
-//         let filters = self.filter.filters.clone().unwrap();
-//         select! {
-//             // accept message
-//             _ = source_instance.pull(tx) => {
-//             },
-//             // relay the message
-//             _ = sink_instance.push(filters.as_ref(), rx) => {
-//             }
-//         }
-//     }
-// }
-//
-// pub fn create_pipeline() -> PipelineSourceBuild {
-//     return PipelineSourceBuild { value: None };
-// }
