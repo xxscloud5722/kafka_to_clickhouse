@@ -14,7 +14,13 @@ pub enum SyncError {
     #[error("{0}")]
     KafkaError(#[from] rdkafka::error::KafkaError),
 
-    #[error("None")]
+    #[error("{0}")]
+    JSONError(#[from] serde_json::Error),
+
+    #[error("{0}")]
+    RegexError(#[from] regex::Error),
+
+    #[error("When encountering Option::None")]
     Option,
 
     #[error("{0}")]

@@ -10,8 +10,9 @@ use log::{error, info, Level, log};
 use serde::Deserialize;
 use serde_json::Value;
 
-use KafkaSync::{CObject, Pip, PipBuilder, ReceiveTrait, SendTrait};
+use KafkaSync::{CObject, Filter, Pip, PipBuilder, ReceiveTrait, SendTrait};
 use KafkaSync::error::SyncError;
+use KafkaSync::parser::{Json, Regular};
 use KafkaSync::sink::Clickhouse;
 use KafkaSync::source::Kafka;
 
@@ -34,10 +35,16 @@ async fn try_main() -> Result<(), SyncError> {
 
     let conf = settings.try_deserialize::<HashMap<String, CObject>>()?;
     let source: Arc<dyn ReceiveTrait> = Arc::new(Kafka::create(&conf)?);
+
+
     let sink: Arc<dyn SendTrait> = Arc::new(Clickhouse);
+    let mut filters = Vec::new();
+    filters.push(Arc::new(Json) as Arc<dyn Filter>);
+    filters.push(Arc::new(Regular::create(&conf)?) as Arc<dyn Filter>);
     PipBuilder::default()
         .conf(conf)
         .source(Some(source))
+        .filters(filters)
         .sink(Some(sink))
         .build()?
         .run().await?;
@@ -71,7 +78,7 @@ async fn main() {
         Err(error) => {
             match error.source() {
                 None => {
-                    error!("Undefined errors.");
+                    error!("{}", error.to_string());
                 }
                 Some(error) => {
                     error!("{:?}", error);
