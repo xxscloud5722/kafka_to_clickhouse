@@ -20,9 +20,15 @@ pub enum SyncError {
     #[error("{0}")]
     RegexError(#[from] regex::Error),
 
+    #[error("{0}")]
+    ClickhouseError(#[from] clickhouse::error::Error),
+
     #[error("When encountering Option::None")]
     Option,
 
     #[error("{0}")]
     MissingParams(&'static str),
+
+    #[error("{0}")]
+    OptionParams(String),
 }

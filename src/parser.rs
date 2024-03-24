@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use log::{debug, warn};
 use regex::Regex;
 use serde_json::Value;
 
@@ -15,7 +16,9 @@ impl Filter for Json {
         for mut x in &mut data {
             let json_value: Value = serde_json::from_str(&x.body)?;
             let map = json_value.as_object().ok_or(SyncError::Option)?;
-            x.log = Some(map.get("log").ok_or(SyncError::Option)?.as_str().ok_or(SyncError::Option)?.trim().to_string());
+            let log = map.get("log").ok_or(SyncError::Option)?.as_str().ok_or(SyncError::Option)?.trim().to_string();
+            debug!("[Log] {}", &log);
+            x.log = Some(log);
             x.map = Some(map.to_owned());
         }
         Ok(data)
@@ -37,7 +40,29 @@ impl Regular {
             .ok_or(SyncError::MissingParams("Environment variable 'parser.regex' could not be found."))?.into();
         let mapping: String = conf.get("mapping")
             .ok_or(SyncError::MissingParams("Environment variable 'parser.mapping' could not be found."))?.into();
-        Ok(Regular { regex: Regex::new(&regex)?, mapping: mapping.split(",").map(|it| it.to_owned()).collect() })
+        debug!("[Regex] Expression : {}", regex);
+        Ok(Regular { regex: Regex::new(&regex)?, mapping: mapping.split(",").map(|it| it.trim().to_owned()).collect() })
+    }
+    pub fn regex(&self, text: &str) -> Vec<String> {
+        return match self.regex.captures(text) {
+            None => {
+                warn!("{}", text);
+                Vec::default()
+            }
+            Some(cap) => {
+                let mut values: Vec<String> = cap.iter().map(|c| {
+                    match c {
+                        None => String::default(),
+                        Some(val) => val.as_str().to_owned()
+                    }
+                }).collect();
+                if values.len() > 0 {
+                    values.remove(0);
+                }
+                debug!("[Regex] Analysis Results : {:?}", values);
+                values
+            }
+        };
     }
 }
 
@@ -49,21 +74,11 @@ impl Filter for Regular {
                 None => continue,
                 Some(attr) => {
                     let text = &x.log.to_owned().ok_or(SyncError::Option)?;
-                    match self.regex.captures(text) {
-                        None => {}
-                        Some(cap) => {
-                            let values: Vec<String> = cap.iter().map(|c| {
-                                match c {
-                                    None => String::default(),
-                                    Some(val) => val.as_str().to_owned()
-                                }
-                            }).collect();
-                            if self.mapping.len() >= values.len() {
-                                for (index, key) in self.mapping.iter().enumerate() {
-                                    let value = values.get(index).ok_or(SyncError::Option)?;
-                                    attr.insert(key.to_owned(), Value::String(value.to_owned()));
-                                }
-                            }
+                    let values = self.regex(text);
+                    if self.mapping.len() >= values.len() {
+                        for (index, key) in self.mapping.iter().enumerate() {
+                            let value = values.get(index).ok_or(SyncError::Option)?;
+                            attr.insert(key.to_owned(), Value::String(value.to_owned()));
                         }
                     }
                 }
@@ -72,3 +87,8 @@ impl Filter for Regular {
         Ok(data)
     }
 }
+
+
+
+
+

@@ -30,6 +30,7 @@ impl From<BorrowedMessage<'_>> for LogMessage {
             topic: message.topic().to_string(),
             body: payload.to_string(),
             partition: message.partition(),
+            offset: message.offset(),
             log: None,
             map: None,
         }
@@ -58,6 +59,10 @@ impl Kafka {
             .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.topic' could not be found."))?.into();
         let group_id: String = conf.get("group_id")
             .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.group_id' could not be found."))?.into();
+        let username: String = conf.get("username")
+            .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.username' could not be found."))?.into();
+        let password: String = conf.get("password")
+            .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.password' could not be found."))?.into();
         let size: f64 = conf.get("size")
             .ok_or(SyncError::MissingParams("Environment variable 'receive.kafka.size' could not be found."))?.into();
         let timeout: f64 = conf.get("timeout")
@@ -70,8 +75,12 @@ impl Kafka {
         consumer_config
             .set("group.id", &group_id)
             .set("bootstrap.servers", &server)
-            .set("auto.offset.reset", "latest")
-            .set("enable.auto.commit", "true");
+            .set("auto.offset.reset", "earliest")
+            .set("enable.auto.commit", "false")
+            .set("sasl.mechanisms", "PLAIN")
+            .set("security.protocol", "SASL_PLAINTEXT")
+            .set("sasl.username", username)
+            .set("sasl.password", password);
 
         // Kafka Consumer.
         let consumer: StreamConsumer = consumer_config.create()?;
@@ -85,6 +94,8 @@ impl Kafka {
     pub async fn kafka_recv(&self, message_vec: &mut Vec<LogMessage>) -> Result<(), SyncError> {
         loop {
             let message = self.consumer.recv().await?;
+            debug!("[Kafka] Recv offset: {:?}", message.offset());
+            self.consumer.store_offset_from_message(&message)?;
             message_vec.push(message.into());
             if message_vec.len() >= self.size {
                 return Ok(());
@@ -110,6 +121,11 @@ impl ReceiveTrait for Kafka {
                 return Ok(vec);
             }
         }
+    }
+
+    async fn confirm(&self) -> Result<(), SyncError> {
+        self.consumer.commit_consumer_state(CommitMode::Sync)?;
+        Ok(())
     }
 }
 
