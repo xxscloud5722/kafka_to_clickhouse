@@ -3,28 +3,26 @@ use std::error::Error;
 use std::io::Write;
 use std::sync::Arc;
 
-use chrono::{DateTime, Local, TimeZone};
+use chrono::{ Local};
 use clap::Parser;
 use config::Config;
-use log::{error, info, Level, log};
-use serde::Deserialize;
-use serde_json::Value;
+use log::{error, info, Level};
 
-use KafkaSync::{CObject, Filter, Pip, PipBuilder, ReceiveTrait, SendTrait};
-use KafkaSync::error::SyncError;
-use KafkaSync::parser::{Json, Regular};
-use KafkaSync::sink::Clickhouse;
-use KafkaSync::source::Kafka;
+use log2click::{CObject, Filter, PipBuilder, ReceiveTrait, SendTrait};
+use log2click::error::SyncError;
+use log2click::parser::{Json, Regular};
+use log2click::sink::Clickhouse;
+use log2click::source::Kafka;
 
 #[derive(Parser, Debug)]
-#[command(version = "1.0.1", about = "Log2Click: Rust program for Kafka log processing with seamless Clickhouse integration and efficient handling of large volumes.", long_about = None)]
+#[command(version = "1.0.3", about = "Log2Click: Rust program for Kafka log processing with seamless Clickhouse integration and efficient handling of large volumes.", long_about = None)]
 #[command(next_line_help = true)]
 struct Args {
     /// Specify a YAML configuration file for easy customization of settings and options.
     #[arg(short, long, default_value = "config.yaml")]
     config: String,
     /// Enable debugging
-    #[arg(long, default_value = "true")]
+    #[arg(long, default_value = "false")]
     debug: bool,
 }
 
@@ -35,7 +33,6 @@ async fn try_main(conf: HashMap<String, CObject>) -> Result<(), SyncError> {
     filters.push(Arc::new(Json) as Arc<dyn Filter>);
     filters.push(Arc::new(Regular::create(&conf)?) as Arc<dyn Filter>);
     PipBuilder::default()
-        .conf(conf)
         .source(Some(source))
         .filters(filters)
         .sink(Some(sink))
@@ -43,6 +40,13 @@ async fn try_main(conf: HashMap<String, CObject>) -> Result<(), SyncError> {
         .run().await?;
 
     return Ok(());
+}
+
+async fn read_config(path: &str) -> Result<HashMap<String, CObject>, SyncError> {
+    let settings = Config::builder()
+        .add_source(config::File::with_name(path))
+        .build()?;
+    Ok(settings.try_deserialize::<HashMap<String, CObject>>()?)
 }
 
 #[tokio::main]
@@ -71,15 +75,22 @@ async fn main() {
         })
         .init();
 
-    let settings = Config::builder()
-        .add_source(config::File::with_name(&args.config))
-        .build()
-        .unwrap();
-    let conf = settings.try_deserialize::<HashMap<String, CObject>>()
-        .unwrap();
-
-    match try_main(conf).await {
-        Ok(_) => {}
+    match read_config(&args.config).await {
+        Ok(conf) => {
+            match try_main(conf).await {
+                Ok(_) => {}
+                Err(error) => {
+                    match error.source() {
+                        None => {
+                            error!("{}", error.to_string());
+                        }
+                        Some(error) => {
+                            error!("{:?}", error);
+                        }
+                    }
+                }
+            };
+        }
         Err(error) => {
             match error.source() {
                 None => {
@@ -90,7 +101,7 @@ async fn main() {
                 }
             }
         }
-    };
+    }
 }
 
 

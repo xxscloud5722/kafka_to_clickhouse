@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use chrono::{NaiveDateTime, ParseResult};
+use chrono::{NaiveDateTime};
 use clickhouse::{Client, Row};
 use log::{debug, info};
-use serde::{Serialize, Serializer};
+use serde::{Serialize};
 
 use crate::{CObject, LogMessage, SendTrait};
 use crate::error::SyncError;
@@ -33,27 +33,25 @@ impl Clickhouse {
 
         let date_format: Option<HashMap<String, CObject>> = conf.get("date-format")
             .ok_or(SyncError::MissingParams("Environment variable 'sender.date-format' could not be found."))?.into();
-        let date_format = date_format
-            .ok_or(SyncError::MissingParams("Environment variable 'sender.date-format' could not be found."))?;
+        let date_format = date_format.unwrap_or(HashMap::default());
         let date_format: HashMap<String, String> = date_format.iter().map(|(key, value)| (key.to_owned(), value.into())).collect();
-
 
         let conf: Option<HashMap<String, CObject>> = conf.get("clickhouse")
             .ok_or(SyncError::MissingParams("Environment variable 'sender.clickhouse' could not be found."))?.into();
         let clickhouse = conf
             .ok_or(SyncError::MissingParams("Environment variable 'sender.clickhouse' could not be found."))?;
         let database: String = clickhouse.get("database")
-            .ok_or(SyncError::MissingParams("Environment variable 'sender.database' could not be found."))?.into();
+            .ok_or(SyncError::MissingParams("Environment variable 'sender.clickhouse.database' could not be found."))?.into();
         let table: String = clickhouse.get("table")
-            .ok_or(SyncError::MissingParams("Environment variable 'sender.table' could not be found."))?.into();
+            .ok_or(SyncError::MissingParams("Environment variable 'sender.clickhouse.table' could not be found."))?.into();
         let server: String = clickhouse.get("server")
-            .ok_or(SyncError::MissingParams("Environment variable 'sender.server' could not be found."))?.into();
+            .ok_or(SyncError::MissingParams("Environment variable 'sender.clickhouse.server' could not be found."))?.into();
         let username: String = clickhouse.get("username")
-            .ok_or(SyncError::MissingParams("Environment variable 'sender.username' could not be found."))?.into();
+            .ok_or(SyncError::MissingParams("Environment variable 'sender.clickhouse.username' could not be found."))?.into();
         let password: String = clickhouse.get("password")
-            .ok_or(SyncError::MissingParams("Environment variable 'sender.password' could not be found."))?.into();
+            .ok_or(SyncError::MissingParams("Environment variable 'sender.clickhouse.password' could not be found."))?.into();
 
-        let field: Vec<String> = mapping.iter().map(|(key, value)| key.to_owned()).collect();
+        let field: Vec<String> = mapping.iter().map(|(key, _value)| key.to_owned()).collect();
         let field_count = mapping.len();
         Ok(Clickhouse {
             mapping,
@@ -91,15 +89,16 @@ impl SendTrait for Clickhouse {
         if message.is_empty() {
             return Ok(());
         }
-        let params: Vec<String> = message.iter().map(|x| self.params.to_owned()).collect();
+        let params: Vec<String> = message.iter().map(|_x| self.params.to_owned()).collect();
         let sql = format!("INSERT INTO {} ({}) VALUES", &self.table, self.field);
         debug!("[Clickhouse] {} ==> {} ...", message.len(), sql);
         let mut handler = self.ck.query(&format!("{}\n{}", sql, params.join(", ")));
         for x in &message {
             let data_item = x.map.clone().ok_or(SyncError::Option)?;
             for (key, data_key) in &self.mapping {
-                let value = data_item.get(data_key).ok_or(SyncError::OptionParams(format!("params {}", data_key)))?
+                let value = data_item.get(data_key).ok_or(SyncError::Option)?
                     .as_str().unwrap_or("").to_owned();
+                // format date
                 if self.date_format.contains_key(key) {
                     match self.date_format.get(key) {
                         Some(format) => {

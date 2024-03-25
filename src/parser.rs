@@ -13,7 +13,7 @@ pub struct Json;
 #[async_trait(? Send)]
 impl Filter for Json {
     async fn process(&self, mut data: Vec<LogMessage>) -> Result<Vec<LogMessage>, SyncError> {
-        for mut x in &mut data {
+        for x in &mut data {
             let json_value: Value = serde_json::from_str(&x.body)?;
             let map = json_value.as_object().ok_or(SyncError::Option)?;
             let log = map.get("log").ok_or(SyncError::Option)?.as_str().ok_or(SyncError::Option)?.trim().to_string();
@@ -69,7 +69,7 @@ impl Regular {
 #[async_trait(? Send)]
 impl Filter for Regular {
     async fn process(&self, mut data: Vec<LogMessage>) -> Result<Vec<LogMessage>, SyncError> {
-        for mut x in &mut data {
+        for x in &mut data {
             match &mut x.map {
                 None => continue,
                 Some(attr) => {

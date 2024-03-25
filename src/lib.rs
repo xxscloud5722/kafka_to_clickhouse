@@ -2,9 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use config::Source;
 use derive_builder::Builder;
-use rdkafka::Message;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -100,7 +98,6 @@ pub trait SendTrait {
 #[derive(Default, Builder)]
 #[builder(setter(into))]
 pub struct Pip {
-    conf: HashMap<String, CObject>,
     #[builder(default = "None")]
     filters: Option<Vec<Arc<dyn Filter>>>,
     source: Option<Arc<dyn ReceiveTrait>>,
@@ -120,6 +117,5 @@ impl Pip {
             send.push(messasge).await?;
             receive.confirm().await?;
         }
-        Ok(())
     }
 }

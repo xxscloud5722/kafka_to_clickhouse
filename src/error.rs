@@ -23,7 +23,7 @@ pub enum SyncError {
     #[error("{0}")]
     ClickhouseError(#[from] clickhouse::error::Error),
 
-    #[error("When encountering Option::None")]
+    #[error("None occurred")]
     Option,
 
     #[error("{0}")]

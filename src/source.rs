@@ -1,16 +1,12 @@
 use std::collections::HashMap;
-use std::env;
-use std::future::Future;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use config::ConfigBuilder;
 use log::{debug, info, warn};
-use rdkafka::{ClientConfig, Message, Offset, TopicPartitionList};
+use rdkafka::{ClientConfig, Message};
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::message::BorrowedMessage;
-use tokio::{spawn, time};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::time;
 
 use crate::{CObject, LogMessage, ReceiveTrait};
 use crate::error::SyncError;
@@ -38,9 +34,6 @@ impl From<BorrowedMessage<'_>> for LogMessage {
 }
 
 pub struct Kafka {
-    server: String,
-    topic: String,
-    group_id: String,
     size: usize,
     timeout: u64,
     consumer: StreamConsumer,
@@ -88,7 +81,7 @@ impl Kafka {
         // Kafka Subscribe.
         consumer.subscribe(&[&topic.to_owned()])?;
 
-        Ok(Kafka { server, topic, group_id, size: size as usize, timeout: timeout as u64, consumer })
+        Ok(Kafka { size: size as usize, timeout: timeout as u64, consumer })
     }
 
     pub async fn kafka_recv(&self, message_vec: &mut Vec<LogMessage>) -> Result<(), SyncError> {
